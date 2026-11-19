@@ -1,0 +1,50 @@
+name: Build PocketTurnip
+
+on:
+  workflow_dispatch:
+    inputs:
+      mesa_ref:
+        description: "Mesa tag or branch (e.g. mesa-26.3.1, or main for bleeding edge)"
+        default: "mesa-26.3.1"
+        required: true
+      default_fps:
+        description: "Built-in frame cap (0 = off; can still be set at runtime)"
+        default: "0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q glslang-tools flex bison zip patchelf ninja-build pkg-config
+          pip install --break-system-packages -q meson mako pyyaml packaging
+
+      - name: Build
+        id: build
+        env:
+          MESA_REF: ${{ inputs.mesa_ref }}
+          DEFAULT_FPS: ${{ inputs.default_fps }}
+        run: ./scripts/build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.name }}
+          path: out/*.zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.build.outputs.name }}-r${{ github.run_number }}"
+          gh release create "$TAG" out/*.zip \
+            --title "$TAG" \
+            --notes "Mesa ${{ inputs.mesa_ref }}, default frame cap: ${{ inputs.default_fps }} (0 = off). Install the zip directly in your emulator's driver manager."
