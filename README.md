@@ -4,7 +4,7 @@ A Mesa Turnip Vulkan driver build tuned for the **Galaxy S23 (Snapdragon 8 Gen 2
 
 ## What's different from stock Turnip
 
-- **A740-only build**, compiled with Snapdragon 8 Gen 2 CPU tuning (`-mcpu=cortex-a715`).
+- **A740-only build**, compiled with Snapdragon 8 Gen 2 CPU tuning (`-mcpu=cortex-a715+nosve`). SVE is left out because the S23 ships with it disabled; the build fails if any SVE instruction gets into the driver.
 - **UBWC gralloc fix**: newer Qualcomm gralloc drops a marker Mesa relies on, which can garble the picture on Android 14+.
 - **Built-in frame limiter** at present time, to cut heat and battery drain in games without their own FPS cap.
 
