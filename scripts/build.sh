@@ -61,12 +61,16 @@ mkdir -p "$WORK/pkgconfig"
 BUILD="$WORK/build"
 rm -rf "$BUILD"
 echo "== Configuring"
-# -mcpu: Snapdragon 8 Gen 2 = Cortex-X3 / A715 / A710 / A510 (armv9-a);
-# cortex-a715 tuning is safe on all of its cores.
+# -mcpu: Snapdragon 8 Gen 2 = Cortex-X3 / A715 / A710 / A510 (armv9-a).
+# The cores have SVE/SVE2 in hardware but Qualcomm ships it disabled, so
+# any SVE instruction dies with SIGILL on the S23. Plain cortex-a715 lets
+# clang auto-vectorise with SVE, so it MUST be turned off with +nosve
+# (which also turns off SVE2). The check after the build enforces this.
+CPU_FLAGS="-mcpu=cortex-a715+nosve"
 meson setup "$BUILD" "$MESA_DIR" \
   --cross-file "$CROSS" \
   -Dbuildtype=release \
-  -Dc_args="-mcpu=cortex-a715" -Dcpp_args="-mcpu=cortex-a715 -Wno-c++11-narrowing" \
+  -Dc_args="$CPU_FLAGS" -Dcpp_args="$CPU_FLAGS -Wno-c++11-narrowing" \
   -Dplatforms=android \
   -Dplatform-sdk-version=$SDK_VER \
   -Dandroid-stub=true \
@@ -79,6 +83,17 @@ meson setup "$BUILD" "$MESA_DIR" \
 
 echo "== Building"
 ninja -C "$BUILD" src/freedreno/vulkan/libvulkan_freedreno.so
+
+echo "== Checking for SVE instructions (disabled on Snapdragon 8 Gen 2)"
+SVE_HITS="$("$TC/llvm-objdump" -d --no-show-raw-insn --mattr=+sve,+sve2 \
+  "$BUILD/src/freedreno/vulkan/libvulkan_freedreno.so" \
+  | grep -E '\b(z[0-9]{1,2}\.[bhsdq]|p[0-9]{1,2}/[zm]|p[0-9]{1,2}\.[bhsd])\b|\b(ptrue|whilelo|whilelt|cntw|cntd|cntb|cnth|incw|incd)\b' || true)"
+if [ -n "$SVE_HITS" ]; then
+  echo "ERROR: the driver contains SVE instructions; it would crash with SIGILL on the S23:"
+  echo "$SVE_HITS" | head -20
+  exit 1
+fi
+echo "   none found"
 
 echo "== Packaging"
 PKG="$WORK/pkg"
