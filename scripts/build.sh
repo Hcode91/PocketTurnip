@@ -84,7 +84,9 @@ echo "== Packaging"
 PKG="$WORK/pkg"
 rm -rf "$PKG" && mkdir -p "$PKG"
 cp "$BUILD/src/freedreno/vulkan/libvulkan_freedreno.so" "$PKG/"
-patchelf --set-soname vulkan.adreno.so "$PKG/libvulkan_freedreno.so"
+# In place, not with patchelf: patchelf moves .dynstr into a new segment and Android then refuses the library
+# ("cannot find ... from verneed").
+python3 "$(dirname "$0")/set_soname.py" "$PKG/libvulkan_freedreno.so" vulkan.adreno.so
 
 COMMIT="$(git -C "$MESA_DIR" rev-parse --short HEAD)"
 MESA_VER="$(cat "$MESA_DIR/VERSION")"
